@@ -34,12 +34,34 @@ Lines starting with `#` are comments and should be skipped. Node IDs are integer
 
 ```
 # example graph
-# fromNode toNode
+# FromNodeId ToNodeId
 0 1
 0 2
 1 3
 2 3
 ```
+
+### Query File Format
+
+A query file is a text file where each line specifies a query:
+
+```
+src K queryType expectedResult
+```
+
+- `queryType`: 1 = count reachable nodes, 2 = max node ID (returns -1 if no reachable nodes)
+- `expectedResult`: the expected output for correctness verification
+
+Example:
+
+```
+# src K queryType(1=count,2=max) expectedResult
+15795 1 1 20
+76820 3 2 53604
+37194 3 2 -1
+```
+
+We provide two query files: `queries20.txt` (20 queries, for debugging) and `queries10000.txt` (10,000 queries, for performance evaluation).
 
 ### Data Structures & Interfaces
 
@@ -62,7 +84,7 @@ struct QueryTask {
     std::string result;
 };
 
-void RunQueriesSequential(const CSRGraph& g, std::vector<QueryTask>& tasks);
+void RunTasksSequential(const CSRGraph& g, std::vector<QueryTask>& tasks);
 
 // execute tasks concurrently with num_threads threads
 void RunTasksParallel(const CSRGraph& g, std::vector<QueryTask>& tasks, int num_threads);
@@ -70,7 +92,7 @@ void RunTasksParallel(const CSRGraph& g, std::vector<QueryTask>& tasks, int num_
 
 ### Pseudocode
 
-The following pseudocode illustrates the overall workflow. It is provided as a referencea, and you may organize your code differently.
+The following pseudocode illustrates the overall workflow. It is provided as a reference, and you may organize your code differently.
 
 ```
 // 1. Load graph
@@ -80,12 +102,10 @@ graph = LoadGraph("edges.txt")
 count_cb = (graph, src, K) -> return count of K-hop reachable nodes
 max_cb   = (graph, src, K) -> return max node ID among K-hop reachable nodes
 
-// 3. Build query tasks
-tasks = [
-    QueryTask(src=0, K=2, cb=count_cb),
-    QueryTask(src=3, K=1, cb=max_cb),
-    ...
-]
+// 3. Load query file and build tasks
+for each line (src, K, queryType, expectedResult) in "queries.txt":
+    cb = (queryType == 1) ? count_cb : max_cb
+    tasks.append(QueryTask(src, K, cb))
 
 // 4. Run sequentially, record time
 seq_tasks = copy(tasks)
@@ -114,9 +134,4 @@ To verify the correctness of your implementation, we recommend the following app
 
 2. **Compare sequential and concurrent results**: Run the same set of queries using both `RunTasksSequential` and `RunTasksParallel`, and verify that they produce identical results.
 
-3. **Verify on the provided dataset**: Once small cases pass, run your implementations on the provided dataset ([cit-HepTh.txt.gz](https://snap.stanford.edu/data/cit-HepTh.html)). Note that node IDs in this dataset are **not necessarily contiguous** starting from 0. You may need to remap them to `[0, N)` or use a mapping structure to handle this. Construct your own queries on this graph and verify that sequential and concurrent results are identical. Consider varying the following factors to observe their impact on performance:
-   - **Number of queries**: e.g., 100 vs. 10,000 queries
-   - **K value**: small (1–2) vs. large (5+), which affects the amount of work per query
-   - **Source vertex selection**: random vertices
-   
-   You should also expect a noticeable speedup from the concurrent version.
+3. **Verify on the provided dataset**: Once small cases pass, run your implementations on the provided dataset ([download link](https://drive.google.com/drive/folders/1Cr4QkLBpWa3Gp0u-9YWNE9voH9Dz4INg)). The dataset includes `soc-Slashdot0902.txt` (the edge list file) and query files. Use `queries20.txt` to debug correctness by comparing your output against the expected results. Then use `queries10000.txt` for performance evaluation. You should expect a noticeable speedup from the concurrent version. Report the correctness and performance results on this dataset in your development journal.
