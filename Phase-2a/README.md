@@ -97,6 +97,31 @@ void BspSerial(const CsrGraph& g, BspAlgorithm& algo);
 void BspParallel(const CsrGraph& g, BspAlgorithm& algo, int nthreads);
 ```
 
+Each of BFS, SSSP, and CC is implemented as a subclass of `BspAlgorithm` (e.g., `class Bfs : public BspAlgorithm`), then passed into a runner:
+
+```cpp
+Bfs bfs(g.num_vertices, /*source=*/0, /*nthreads=*/1);
+BspSerial(g, bfs);
+
+Bfs bfs_p(g.num_vertices, /*source=*/0, /*nthreads=*/4);
+BspParallel(g, bfs_p, /*nthreads=*/4);
+```
+
+A minimal `BspSerial` is just a loop over the three virtual methods:
+
+```cpp
+void BspSerial(const CsrGraph& g, BspAlgorithm& algo) {
+  while (algo.HasWork()) {
+    for (uint32_t v = 0; v < g.num_vertices; v++) {
+      algo.Process(/*tid=*/0, v, g);
+    }
+    algo.PostRound();
+  }
+}
+```
+
+`BspParallel` has the same outer structure. The only change is inside the round: instead of one thread iterating every vertex, partition `[0, num_vertices)` into `nthreads` contiguous ranges, spawn an `std::thread` per range (each calling `Process()` with its own `tid`), and wait for all threads to finish before calling `PostRound()`.
+
 ### Algorithm Design
 
 Since the same algorithm must run under both runners, design `Process(tid, v, g)` so it only **reads** neighbor state and only **writes** `v`'s own state. The parallel runner assigns each vertex to exactly one thread (static partitioning of `[0, num_vertices)`), so `v`'s state is written by one thread per round.
@@ -126,7 +151,7 @@ Process(tid, v, g):
 
 > **Note on CC**: CC computes weakly connected components, so labels should propagate across every edge regardless of direction. For CC, `Process()` must scan both in-neighbors and out-neighbors.
 
-### Pseudocode
+### Overall Workflow
 
 The following pseudocode illustrates the overall workflow. It is provided as a reference, and you may organize your code differently.
 
